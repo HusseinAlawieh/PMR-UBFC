@@ -1,13 +1,4 @@
 <template>
-    <div v-if="userHasSpot">
-      <br>
-      <h1><strong>Your Reserved Spot Details:</strong></h1>
-      <br>
-      <p>{{userSpotInfo.display_name}}</p>
-      <br>
-      <button class="cancel-button" @click="cancelReservation">Cancel Reservation</button>
-    </div>
-    <br>
     <div>
       <div id="map" style="height: 400px;"></div>
     </div>
@@ -37,7 +28,6 @@
     data() {
       return {
         map: null,
-        userHasSpot:false,
         userSpotInfo:null,
         fetchingTimer: null,
       };
@@ -52,18 +42,7 @@
             const { id, latitude, longitude, availability , user_id} = location;
             const markerIcon = availability === 1 ? unavailableIcon : availableIcon;
             const marker = L.marker([latitude, longitude], { icon: markerIcon }).addTo(this.map);
-            if (availability === 1 && user_id === this.$page.props.auth.user.id) {
-              this.userHasSpot = true;
-              this.userSpotInfo = await this.getLocationInfo(longitude,latitude);
-              marker.on('click', () => {
-                Swal.fire({
-                  icon: 'warning',
-                  title: 'Yours',
-                  text: 'This is your spot.',
-                });
-              });
-            }
-            else if(availability === 1){
+            if(availability === 1){
               marker.on('click', () => {
                 Swal.fire({
                   icon: 'error',
@@ -73,37 +52,46 @@
               });
             } else {
               marker.on('click', async () => {
-                const locInfo = await this.getLocationInfo(longitude, latitude);
-                Swal.fire({
-                  icon: 'question',
-                  text: 'Address Details:' + locInfo.display_name,
-                  title: 'Get directions to this spot?',
-                  showCancelButton: true,
-                  confirmButtonText: 'Yes',
-                  cancelButtonText: 'No',
-                }).then((result) => {
-                  if (result.isConfirmed) {
-                    // User wants to get directions, use Geolocation API to get user's location
-                    if (navigator.geolocation) {
-                      navigator.geolocation.getCurrentPosition(
-                        (position) => {
-                          const { latitude: userLat, longitude: userLng } = position.coords;
-                          // Open a new window/tab with a link for directions
-                          window.open(`https://www.google.com/maps/dir/${userLat},${userLng}/${latitude},${longitude}`);
-                        },
-                        (error) => {
-                          console.error('Error getting user location:', error);
-                          // Handle error or provide a default location for directions
-                        }
-                      );
-                    } else {
-                      console.error('Geolocation is not supported by this browser.');
-                      // Handle lack of geolocation support
-                    }
-                  }
-                });
+                  const locInfo = await this.getLocationInfo(longitude, latitude);
+                  const loadingMessage = 'Loading directions...';
+
+                  Swal.fire({
+                      icon: 'question',
+                      text: 'Address Details:' + locInfo.display_name,
+                      title: 'Get directions to this spot?',
+                      showCancelButton: true,
+                      confirmButtonText: 'Yes',
+                      cancelButtonText: 'No',
+                      showLoaderOnConfirm: true, // Show loader while processing
+                      preConfirm: () => {
+                          return new Promise((resolve) => {
+                              // User wants to get directions, use Geolocation API to get user's location
+                              if (navigator.geolocation) {
+                                  navigator.geolocation.getCurrentPosition(
+                                      (position) => {
+                                          const { latitude: userLat, longitude: userLng } = position.coords;
+                                          // Open a new window/tab with a link for directions
+                                          window.open(`https://www.google.com/maps/dir/${userLat},${userLng}/${latitude},${longitude}`);
+                                          resolve();
+                                      },
+                                      (error) => {
+                                          console.error('Error getting user location:', error);
+                                          // Handle error or provide a default location for directions
+                                          resolve();
+                                      }
+                                  );
+                              } else {
+                                  console.error('Geolocation is not supported by this browser.');
+                                  // Handle lack of geolocation support
+                                  resolve();
+                              }
+                          });
+                      },
+                      allowOutsideClick: () => !Swal.isLoading(), // Prevent dismissing when loading
+                  });
               });
             }
+
           });
         })
         .catch((error) => {
@@ -119,39 +107,15 @@
         throw error; // Re-throw the error to handle it elsewhere if needed
       }
     },
-    cancelReservation(){
-      Swal.fire({
-                  icon: 'question',
-                  title: 'Cancel your reservation?',
-                  showCancelButton: true,
-                  confirmButtonText: 'Yes',
-                  cancelButtonText: 'No',
-                }).then((result) => {
-                  if (result.isConfirmed) {
-                    const userId = this.$page.props.auth.user.id;
-                    axios.post('/api/parkingspot/cancel/'+userId )
-                      .then((response) => {
-                        Swal.fire('Success', 'Reservation cancelled!', 'success');
-                        this.fetchLocations();
-                        this.userHasSpot = false;
-                        this.userSpotInfo = null;
-                      })
-                      .catch((error) => {
-                        console.error('Error cancelling reservation :', error);
-                        Swal.fire('Error', 'Failed to cancel the reservation.', 'error');
-                      });
-                  }
-                });
-    },
+
 
     startFethching() {
-    this.fetchLocations();
-
-    // Set up a timer to call fetchLocations every 5 seconds
-    this.fetchingTimer = setInterval(() => {
       this.fetchLocations();
-    }, 5000); // 5 seconds interval
-  },
+      // Set up a timer to call fetchLocations every 5 seconds
+      this.fetchingTimer = setInterval(() => {
+        this.fetchLocations();
+      }, 5000); // 5 seconds interval
+    },
 
   },
     mounted() {

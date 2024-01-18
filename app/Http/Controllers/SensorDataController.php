@@ -19,9 +19,6 @@ public function store(Request $request){
         'longitude' => 'required|numeric',
     ]);
 
-    if ($request->availability == 1 && !$request->has('user_id')) {
-        return response()->json(['error' => 'User ID is required when availability is 1.'], 422);
-    }
 
     // Check if a record with the same location exists in the database
     $existingRecord = ParkingSpots::where('latitude', $request->latitude)
@@ -30,7 +27,7 @@ public function store(Request $request){
 
     if ($existingRecord) {
         if ($request->availability == 1) {
-            $existingRecord->user_id = $request->user_id;
+            $existingRecord->user_id = $request->user_id ?? null;
             $existingRecord->availability = $request->availability;
         }
         else{
@@ -47,7 +44,7 @@ public function store(Request $request){
 
         if ($request->availability == 1) {
             $parkingStatus->availability = 1;
-            $parkingStatus->user_id = $request->user_id;
+            $parkingStatus->user_id = $request->user_id ?? null;
         } else {
             $parkingStatus->availability = 0;
         }
